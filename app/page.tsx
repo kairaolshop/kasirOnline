@@ -1,65 +1,734 @@
-import Image from "next/image";
+"use client";
+
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { searchProduk, ProdukSuggestion } from "@/lib/productUtils";
+import Link from "next/link";
+
+interface Marketplace {
+  id: number;
+  namaToko: string;
+}
+
+interface KeranjangItem {
+  kodePesanan: string;
+  kodeBarang: string;
+  namaBarang: string;
+  warna: string;
+  jumlah: number;
+  hargaJual: number;
+  hargaBeli: number;
+  subtotal: number;
+  totalBeli: number;
+  totalAdmin: number;
+  totalZakat: number;
+  labaBersih: number;
+  marketplace: string;
+  varianId: number;
+}
 
 export default function Home() {
+  // ==================== STATE ====================
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Form & Data
+  const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
+  const [marketplace, setMarketplace] = useState("");
+  const [kodePesanan, setKodePesanan] = useState("");
+  const [namaProduk, setNamaProduk] = useState("");
+  const [kodeProduk, setKodeProduk] = useState("");
+  const [warna, setWarna] = useState("");
+  const [hargaJual, setHargaJual] = useState("");
+  const [hargaBeli, setHargaBeli] = useState("");
+  const [jumlahTerjual, setJumlahTerjual] = useState("");
+
+  // Keranjang & Tabel
+  const [keranjang, setKeranjang] = useState<KeranjangItem[]>([]);
+  const [suggestions, setSuggestions] = useState<ProdukSuggestion[]>([]);
+  const [selectedProduk, setSelectedProduk] = useState<ProdukSuggestion | null>(null);
+  const [penjualanHarian, setPenjualanHarian] = useState<any[]>([]);
+
+  // Tanggal
+  const [tanggalInput, setTanggalInput] = useState<string>("");
+
+  // ==================== USEEFFECT ====================
+
+  // Mount & Load dari localStorage
+  useEffect(() => {
+    setIsMounted(true);
+
+    const savedDate = localStorage.getItem("lastTransactionDate");
+    setTanggalInput(savedDate || new Date().toISOString().split("T")[0]);
+
+    const cached = localStorage.getItem("cachedPenjualanHarian");
+    if (cached) {
+      try {
+        setPenjualanHarian(JSON.parse(cached));
+      } catch (e) {
+        console.error("Gagal parse cache penjualan");
+      }
+    }
+  }, []);
+
+  // Simpan tanggal ke localStorage
+  useEffect(() => {
+    if (isMounted && tanggalInput) {
+      localStorage.setItem("lastTransactionDate", tanggalInput);
+    }
+  }, [tanggalInput, isMounted]);
+
+  // Simpan cache penjualan harian
+  useEffect(() => {
+    if (isMounted && penjualanHarian.length > 0) {
+      localStorage.setItem("cachedPenjualanHarian", JSON.stringify(penjualanHarian));
+    }
+  }, [penjualanHarian, isMounted]);
+
+  // Fetch marketplace
+  useEffect(() => {
+    fetch("/api/marketplace")
+      .then((res) => res.json())
+      .then(setMarketplaces)
+      .catch(console.error);
+  }, []);
+
+  // Autocomplete produk
+  useEffect(() => {
+    if (namaProduk.length >= 2) {
+      searchProduk(namaProduk).then(setSuggestions);
+    } else {
+      setSuggestions([]);
+    }
+  }, [namaProduk]);
+
+  // Fetch penjualan harian (ikuti tanggalInput)
+  useEffect(() => {
+    if (!isMounted || !tanggalInput) return;
+
+    const fetchPenjualan = async () => {
+      try {
+        const url = `/api/penjualan?tanggal=${tanggalInput}&_=${Date.now()}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        setPenjualanHarian(data || []);
+      } catch (err) {
+        console.error("Gagal load data harian", err);
+        setPenjualanHarian([]);
+      }
+    };
+
+    fetchPenjualan();
+  }, [tanggalInput, isMounted]);
+
+  // ==================== COMPUTED VALUES ====================
+  const { terjualShopee, terjualTiktok } = useMemo(() => {
+    const shopee = new Set(
+      penjualanHarian
+        .filter((item) => item.marketplace?.toLowerCase() === "shopee")
+        .map((item) => item.kodePesanan)
+    ).size;
+
+    const tiktok = new Set(
+      penjualanHarian
+        .filter((item) => item.marketplace?.toLowerCase() === "tiktok")
+        .map((item) => item.kodePesanan)
+    ).size;
+
+    return { terjualShopee: shopee, terjualTiktok: tiktok };
+  }, [penjualanHarian]);
+
+  // ==================== HANDLERS ====================
+  const pilihProduk = useCallback((produk: ProdukSuggestion) => {
+    setSelectedProduk(produk);
+    setNamaProduk(produk.nama);
+    setKodeProduk(produk.kode);
+    setHargaJual(produk.hargaJual.toString());
+    setHargaBeli(produk.hargaBeli.toString());
+    setWarna(produk.variants?.[0]?.warna || "");
+    setSuggestions([]);
+  }, []);
+
+  const tambahKeKeranjang = async () => {
+    if (!kodePesanan || !namaProduk || !kodeProduk || !jumlahTerjual || !marketplace) {
+      alert("Lengkapi semua field + pilih marketplace!");
+      return;
+    }
+
+    const hargaJualNum = Number(hargaJual) || 0;
+    const hargaBeliNum = Number(hargaBeli) || 0;
+    const jumlahNum = Number(jumlahTerjual);
+
+    // Hitung laba dengan harga beli real
+    const { totalAdmin, totalZakat, labaBersih } = await calculateLaba(
+      hargaJualNum,
+      hargaBeliNum, // Pakai harga beli dari state/DB
+      jumlahNum,
+      marketplace
+    );
+
+    const itemBaru: KeranjangItem = {
+      kodePesanan,
+      kodeBarang: kodeProduk,
+      namaBarang: namaProduk,
+      warna,
+      jumlah: jumlahNum,
+      hargaJual: hargaJualNum,
+      hargaBeli: hargaBeliNum,
+      subtotal: jumlahNum * hargaJualNum,
+      totalBeli: jumlahNum * hargaBeliNum,
+      totalAdmin,
+      totalZakat,
+      labaBersih,
+      marketplace,
+      varianId: selectedProduk?.variants.find(v => v.warna === warna)?.id || 0,
+    };
+
+    setKeranjang([...keranjang, itemBaru]);
+
+     setNamaProduk("");
+    setKodeProduk("");
+    setWarna("");
+    setHargaJual("");
+    setHargaBeli("");
+    setJumlahTerjual("");
+    setSelectedProduk(null);
+    setSuggestions([]);
+  };
+
+  const calculateLaba = async (
+    hargaJualSatuan: number,
+    hargaBeliSatuan: number = 0, // kalau ada input harga beli nanti
+    jumlah: number,
+    marketplaceNama: string
+  ) => {
+    // Ambil semua biaya admin aktif untuk marketplace ini
+    const res = await fetch(`/api/adminfee?marketplace=${encodeURIComponent(marketplaceNama)}`);
+    const adminFees = await res.json(); // asumsi return [{tipeNominal: '%', nominal: 8.25}, ...]
+
+    let totalAdminPerUnit = 0;
+
+    adminFees.forEach((fee: { tipeNominal: string; nominal: number }) => {
+      if (fee.tipeNominal === "%") {
+        totalAdminPerUnit += hargaJualSatuan * (fee.nominal / 100);
+      } else if (fee.tipeNominal === "Rp") {
+        totalAdminPerUnit += fee.nominal;
+      }
+    });
+
+    const labaKotorPerUnit = hargaJualSatuan - hargaBeliSatuan - totalAdminPerUnit;
+    const zakatPerUnit = labaKotorPerUnit > 0 ? labaKotorPerUnit * 0.025 : 0;
+    const labaBersihPerUnit = labaKotorPerUnit - zakatPerUnit;
+
+    return {
+      totalAdmin: Math.round(totalAdminPerUnit * jumlah),
+      totalZakat: Math.round(zakatPerUnit * jumlah),
+      labaBersih: Math.round(labaBersihPerUnit * jumlah),
+    };
+  };
+
+  
+
+  const handleSimpan = async () => {
+    if (keranjang.length === 0) {
+      alert("Keranjang kosong!");
+      return;
+    }
+
+    try {
+      const payload = {
+        kodePesanan,
+        marketplace,
+        tanggalInput,
+        items: keranjang.map((item) => ({
+          varianId: item.varianId,
+          jumlah: item.jumlah,
+          hargaJual: item.hargaJual,
+          hargaBeli: item.hargaBeli,
+          totalAdmin: item.totalAdmin,
+          totalZakat: item.totalZakat,
+          labaBersih: item.labaBersih,
+        })),
+      };
+
+      const res = await fetch("/api/penjualan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error((await res.json()).error || "Gagal simpan");
+
+      // Reset form
+      setKeranjang([]);
+      setMarketplace("");
+      setKodePesanan("");
+      const resHarian = await fetch(`/api/penjualan`);
+      const data = await resHarian.json();
+      setPenjualanHarian(data);
+
+      alert("Data berhasil disimpan!");
+    } catch (error) {
+      console.error(error);
+      alert("Gagal menyimpan data.");
+    }
+  };
+
+  const handleDelete = async (id: number) => {
+  if (!confirm(`Hapus transaksi ini? Stok akan dikembalikan.`)) return;
+
+  try {
+    const res = await fetch(`/api/penjualan?id=${id}`, { method: 'DELETE' });
+    
+    if (res.ok) {
+      const resHarian = await fetch('/api/penjualan');
+      setPenjualanHarian(await resHarian.json());
+      alert("Transaksi berhasil dihapus.");
+    } else {
+      const errorData = await res.json();
+      alert(`Gagal hapus: ${errorData.error}`);
+    }
+  } catch (error) {
+    alert("Terjadi kesalahan sistem.");
+  }
+  };
+
+  const handleReset = async () => {
+  if (!confirm('Yakin ingin reset database penjualan? Semua data akan hilang!')) return;
+
+  try {
+    const res = await fetch('/api/penjualan/reset', { method: 'POST' });
+    if (!res.ok) throw new Error('Reset gagal');
+    setPenjualanHarian([]);
+    setKeranjang([]);
+    const resHarian = await fetch('/api/penjualan');
+    const freshData = await resHarian.json();
+    setPenjualanHarian(freshData);
+
+    alert('Reset berhasil! Data penjualan sudah dikosongkan.');
+  } catch (error) {
+    console.error('Reset error:', error);
+    alert('Gagal reset database. Coba lagi atau cek console.');
+  }
+  };
+
+  const simpanBelumBayar = async () => {
+  if (keranjang.length === 0) {
+    alert("Keranjang masih kosong!");
+    return;
+  }
+
+  try {
+    const res = await fetch("/api/belumbayar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: keranjang }), // Kirim array keranjang
+    });
+
+    if (res.ok) {
+      alert("Berhasil simpan ke status Belum Bayar! Stok telah dikurangi.");
+      // Bersihkan form dan keranjang setelah berhasil
+      setKeranjang([]);
+      setMarketplace("");
+      setKodePesanan("");
+    } else {
+      const errorData = await res.json();
+      alert(`Gagal simpan: ${errorData.error}`);
+    }
+  } catch (error) {
+    console.error("Error simpan belum bayar:", error);
+    alert("Terjadi kesalahan sistem saat menyimpan.");
+  }
+  };
+
+
+const rekapHarian = async () => {
+  const hariIni = new Date().toLocaleDateString("id-ID");
+  if (!confirm(`Rekap & pindah penjualan hari ini (${hariIni}) ke Rekap Harian? Data harian akan direset.`)) return;
+
+  try {
+    const res = await fetch("/api/penjualan/rekap-harian", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tanggal: new Date().toISOString().split("T")[0] }),
+    });
+
+    if (res.ok) {
+      alert("Rekap harian berhasil!");
+      localStorage.removeItem("cachedPenjualanHarian");
+      
+      // 3. Opsional: Update tanggal terakhir rekap jika diperlukan
+      // localStorage.setItem("lastTransactionDate", new Date().toISOString().split("T")[0]);
+      
+    } else {
+      const err = await res.json();
+      alert("Gagal rekap: " + (err.error || err.message));
+    }
+  } catch (err) {
+    alert("Terjadi kesalahan koneksi ke server");
+    console.error(err);
+  }
+};
+
+  const getColormarket = (name: string) => {
+    const n = name.toLowerCase();
+    if (n.includes("shopee")) return "text-orange-500 font-bold";
+    if (n.includes("tiktok")) return "text-green-500 font-bold";
+    return "";
+  };
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
+    <div className="min-h-screen bg-[#c9d7ff] p-4 font-sans">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow p-4 mb-4">
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+          <h1 className="text-2xl font-bold text-blue-800">Kasir - Transaksi Harian</h1>
+          <p className="text-lg text-red-500 font-bold">
+          {new Intl.DateTimeFormat("id-ID", {
+            weekday: "long",
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+          }).format(new Date()).replace(/\//g, "-")}
+        </p>
+        </div>
+        
+        <div className="flex flex-wrap gap-2 mt-3 justify-center">
+          <input
+            type="date"
+            value={tanggalInput}
+            onChange={(e) => setTanggalInput(e.target.value)}
+            className="border rounded px-3 py-2 text-sm"/>
+            <Link href="/databarang">
+            <button className=" cursor-pointer bg-black text-white px-3 py-1.5 rounded text-sm">
+              Data Barang
+            </button>
+            </Link>
+            <Link href="/biayaadmin"> 
+            <button className="bg-yellow-400 px-3 py-1.5 rounded text-sm cursor-pointer">Setting Admin</button>
+            </Link> 
+            <button
+            onClick={rekapHarian}
+            className=" cursor-pointer bg-red-600 text-white px-3 py-1.5 rounded text-sm">Rekap harian</button>
+            <Link href="/rekapharian">
+            <button className="cursor-pointer bg-purple-600 text-white px-3 py-1.5 rounded text-sm">Open Transaksi</button>
+            </Link>
+          </div>
+        </div>
+
+      {/* Filter atas */}
+      <div className="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[180px]">
+          <label className="block text-sm mb-1">Marketplace</label>
+          <select
+            value={marketplace}
+            onChange={(e) => setMarketplace(e.target.value)}
+            className="w-full border rounded px-3 py-2 text-sm"
+          >
+            <option value="">Pilih Marketplace</option>
+            {marketplaces.map((m) => (
+              <option key={m.id} value={m.namaToko}>
+                {m.namaToko}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex-1 min-w-[180px]">
+          <label className="block text-sm mb-1">Cari Kode</label>
+          <input type="text" className="w-full border rounded px-3 py-2 text-sm" placeholder="Kode pesanan..." />
+        </div>
+
+        <div className="flex gap-2 flex-wrap">
+          <Link href ="penghasilan">
+          <button className="cursor-pointer bg-yellow-400 px-4 py-2 rounded text-sm">Penghasilan</button>
+          </Link>
+          <Link href="/belumbayar">
+          <button className="cursor-pointer bg-green-400 px-4 py-2 rounded text-sm">Belum Bayar</button></Link>
+          <button 
+          onClick={handleReset}
+          className="cursor-pointer bg-red-500 text-white px-4 py-2 rounded text-sm">RESET</button>
+        </div>
+      </div>
+
+      {/* Grid utama: Form kiri + Tabel tengah */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:h-[calc(80vh-300px)]">
+        {/* Form kiri */}
+        <div className="bg-white rounded-lg shadow p-4 space-y-3">
+        <input
+          type="text"
+          placeholder="Kode pesanan"
+          value={kodePesanan}
+          onChange={(e) => setKodePesanan(e.target.value)}
+          className="w-full border rounded px-3 py-2 text-sm"
         />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+        <div className="flex gap-2 relative">
+        <input
+          type="text"
+          placeholder="Nama Produk"
+          value={namaProduk}
+          onChange={(e) => setNamaProduk(e.target.value)}
+          className="flex-1 border rounded px-3 py-2 text-sm min-w-0"
+          autoComplete="off"
+        />
+
+        {/* Suggestion dropdown */}
+        {suggestions.length > 0 && (
+        <ul className="absolute top-full left-0 w-full bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto z-50 mt-1">
+          {/* Deduplicate berdasarkan nama + kode */}
+          {(() => {
+            const seen = new Map<string, ProdukSuggestion>();
+            const uniqueSuggestions = suggestions.filter((prod) => {
+              const key = `${prod.nama}|${prod.kode}`;
+              if (seen.has(key)) return false;
+              seen.set(key, prod);
+              return true;
+            });
+
+      return uniqueSuggestions.map((prod) => (
+        <li
+          key={`${prod.nama}|${prod.kode}`}  // key unik berdasarkan nama+kode
+          onClick={() => pilihProduk(prod)}
+          className="px-3 py-2 hover:bg-blue-50 cursor-pointer border-b last:border-b-0"
+        >
+          <div className="font-medium">{prod.nama}</div>
+          <div className="text-xs text-gray-600">
+            {prod.kode} • Rp {prod.hargaJual.toLocaleString("id-ID")}
+          </div>
+             </li>
+                ));
+              })()}
+            </ul>
+          )}
+            <button className="bg-yellow-400 px-4 py-2 rounded text-sm whitespace-nowrap flex-shrink-0">
+              Cari
+            </button>
+          </div>
+
+        <input
+          type="text"
+          placeholder="Kode Produk"
+          value={kodeProduk}
+          readOnly // otomatis terisi
+          className="w-full border rounded px-3 py-2 text-sm bg-gray-100"
+        />
+
+        {/* Warna / Varian - Dropdown kalau ada lebih dari 1 varian */}
+        <div>
+            <label className="block text-sm mb-1">Warna / Varian</label>
+            {selectedProduk && Array.isArray(selectedProduk.variants) && selectedProduk.variants.length > 0 ? (
+              <select
+                value={warna}
+                onChange={(e) => setWarna(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                required
+              >
+                <option value="">Pilih Warna / Varian</option>
+                {selectedProduk.variants.map((v) => (
+                  <option
+                  key={v.id || v.warna}
+                  value={v.warna}
+                  disabled={v.stok <= 0}
+                >
+                  {`${selectedProduk.kode}•${v.warna}•${v.stok <= 0 ? "(Stok Habis)" : `(Stok: ${v.stok})`}`}
+                </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                type="text"
+                placeholder="Warna (opsional)"
+                value={warna}
+                onChange={(e) => setWarna(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+            )}
+          </div>
+
+        <input
+          type="number"
+          placeholder="Harga jual"
+          value={hargaJual}
+          readOnly // otomatis dari DB
+          className="w-full border rounded px-3 py-2 text-sm bg-gray-100"
+        />
+        <input
+          type="number"
+          placeholder="Harga Beli"
+          value={hargaBeli}
+          readOnly // otomatis dari DB
+          className="w-full border rounded px-3 py-2 text-sm bg-gray-100"
+        />
+        <input
+          type="number"
+          placeholder="Terjual"
+          value={jumlahTerjual}
+          onChange={(e) => setJumlahTerjual(e.target.value)}
+          className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
+
+        <button
+          onClick={tambahKeKeranjang}
+          className="cursor-pointer bg-yellow-400 w-full py-2.5 rounded font-medium text-sm"
+        >
+          Add Cart
+        
+          </button>
+          <button 
+          onClick={handleSimpan}
+          className="cursor-pointer bg-cyan-400 w-full py-2 rounded text-sm">SIMPAN</button>  
+
+          <button 
+          onClick={simpanBelumBayar}
+          className="cursor-pointer bg-green-500 w-full py-2.5 rounded font-medium text-sm">
+            Belum bayar
+          </button>          
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+
+        {/* Tabel Penjualan Harian */}
+        <div className="lg:col-span-3 bg-white rounded-lg shadow flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-auto">
+        <table className="min-w-full text-xs md:text-sm sticky-header">
+          <thead className="bg-gray-800 text-white sticky top-0 z-10">
+            <tr>
+                <th className="p-2 text-left">#</th>
+                <th className="p-2 text-left">Kode Pesanan</th>
+                <th className="p-2 text-left">Kode Barang</th>
+                <th className="p-2 text-left">MP</th>
+                <th className="p-2 text-left">Nama Barang</th>
+                <th className="p-2 text-left">Warna</th>
+                <th className="p-2 text-center">Qty</th>
+                <th className="p-2 text-right">Total Jual</th>
+                <th className="p-2 text-right">Total Beli</th>
+                <th className="p-2 text-right">Total Admin</th>
+                <th className="p-2 text-right">Zakat</th>
+                <th className="p-2 text-right">Laba</th>
+                <th className="p-2 text-right">action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {penjualanHarian.length === 0 ? (
+                <tr className="text-center text-gray-500 py-4">
+                  <td colSpan={13} className="p-4">Belum ada data penjualan hari ini.</td>
+                </tr>
+              ) : (
+                penjualanHarian.map((transaksi: any, idx: number) => {
+                  const jumlahTotal = transaksi.items.reduce((sum: number, it: any) => sum + it.jumlah, 0);
+                  const hargaJualTotal = transaksi.items.reduce((sum: number, it: any) => sum + (it.hargaJual * it.jumlah), 0);
+                  const hargaBeliTotal = transaksi.items.reduce((sum: number, it: any) => sum + (it.hargaBeli * it.jumlah), 0);
+                  const totalAdminTotal = transaksi.items.reduce((sum: number, it: any) => sum + it.totalAdmin, 0);
+                  const zakatTotal = transaksi.items.reduce((sum: number, it: any) => sum + (it.zakat || 0), 0);
+                  const labaTotal = transaksi.items.reduce((sum: number, it: any) => sum + it.laba, 0);
+
+                  return (
+                    <tr key={transaksi.id} className="border-b hover:bg-gray-50 items-start">
+                      <td className="p-2 align-top">{idx + 1}</td>
+                      <td className="p-2 align-top font-bold text-blue-700">{transaksi.kodePesanan}</td>
+                      <td className="p-2 align-top font-mono text-[10px]">
+                        {transaksi.items.map((it: any, i: number) => (
+                          <div key={i} className="border-b border-gray-100 text-sm last:border-0 truncate max-w-[150px]">
+                            {it.varian?.barang?.kode || "N/A"}
+                          </div>
+                        ))}
+                      </td>
+                      <td className={`p-2 ${getColormarket(transaksi.marketplace)}`}>{transaksi.marketplace}</td>
+                      <td className="p-2 align-top text-xs">
+                        {transaksi.items.map((it: any, i: number) => (
+                          <div key={i} className="border-b border-gray-50 last:border-0 truncate max-w-[150px]">
+                            {it.varian?.barang?.nama || "N/A"}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="p-2 align-top text-xs text-center">
+                        {transaksi.items.map((it: any, i: number) => (
+                          <div key={i} className="border-b border-gray-50 last:border-0">
+                            {it.varian?.warna || "-"}
+                          </div>
+                        ))}
+                      </td>
+                      <td className="p-2 text-center">{jumlahTotal}</td>
+                      <td className="p-2 text-right">Rp {hargaJualTotal.toLocaleString("id-ID")}</td>
+                      <td className="p-2 text-right">Rp {hargaBeliTotal.toLocaleString("id-ID")}</td>
+                      <td className="p-2 text-right text-red-600">Rp {totalAdminTotal.toLocaleString("id-ID")}</td>
+                      <td className="p-2 text-right">Rp {zakatTotal.toLocaleString("id-ID")}</td>
+                      <td className="p-2 text-right font-bold text-green-700">Rp {labaTotal.toLocaleString("id-ID")}</td>
+                      <td className="p-2 text-center">
+                        <button
+                          onClick={() => handleDelete(transaksi.id)}
+                          className="bg-red-100 text-red-600 hover:bg-red-600 hover:text-white p-1.5 rounded transition-colors"
+                          title="Hapus & Kembalikan Stok"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
         </div>
-      </main>
+        </div>
+      </div>
+
+      {/* Keranjang Pembeli */}
+      <div className="mt-6 bg-white rounded-lg shadow p-4">
+        <h3 className="text-lg font-bold mb-3">Keranjang Pembeli</h3>
+        {keranjang.length === 0 ? (
+          <p className="text-center text-gray-500 py-6">Keranjang masih kosong...</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-200">
+                <tr>
+                  <th className="p-2 text-left">Kode Barang</th>
+                  <th className="p-2 text-left">Nama</th>
+                  <th className="p-2 text-left">Warna</th>
+                  <th className="p-2 text-center">Qty</th>
+                  {/*<th className="p-2 text-right">Harga Jual</th>*/}
+                  {/*<th className="p-2 text-right">Harga Beli</th>*/}
+                  <th className="p-2 text-right">Total Jual</th>
+                  <th className="p-2 text-right">Total Beli</th>
+                  <th className="p-2 text-right">Admin</th>
+                  <th className="p-2 text-right">Zakat</th>
+                  <th className="p-2 text-right">Laba</th>
+                </tr>
+              </thead>
+              <tbody>
+                {keranjang.map((item, idx) => (
+                  <tr key={idx} className="border-b">
+                    <td className="p-2">{item.kodeBarang}</td>
+                    <td className="p-2">{item.namaBarang}</td>
+                    <td className="p-2">{item.warna || "-"}</td>
+                    <td className="p-2 text-center">{item.jumlah}</td>
+                    {/*<td className="p-2 text-right">Rp {item.hargaJual.toLocaleString("id-ID")}</td>*/}
+                    {/*<td className="p-2 text-right">Rp {item.hargaBeli.toLocaleString("id-ID")}</td>*/}
+                    <td className="p-2 text-right">Rp {item.subtotal.toLocaleString("id-ID")}</td>
+                    <td className="p-2 text-right">Rp {item.totalBeli.toLocaleString("id-ID")}</td>
+                    <td className="p-2 text-right">Rp {item.totalAdmin.toLocaleString("id-ID")}</td>
+                    <td className="p-2 text-right">Rp {item.totalZakat.toLocaleString("id-ID")}</td>
+                    <td className="p-2 text-right font-medium">Rp {item.labaBersih.toLocaleString("id-ID")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Ringkasan bawah */}
+      <div className="mt-6 bg-white rounded-lg shadow p-4 flex flex-wrap gap-6 justify-center">
+        <div className="flex items-center gap-3">
+          <div className="bg-green-600 text-white w-8 h-8 flex items-center justify-center rounded">S</div>
+          <span className="font-medium">{terjualShopee} Terjual</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="bg-black text-white w-8 h-8 flex items-center justify-center rounded">♪</div>
+          <span className="font-medium">{terjualTiktok} Terjual</span>
+        </div>
+        <button className="cursor-pointer bg-blue-600 text-white px-6 py-3 rounded-lg font-medium">
+          🖨️ Print PDF
+        </button>
+      </div>
     </div>
   );
 }

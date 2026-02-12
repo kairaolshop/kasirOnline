@@ -1,0 +1,139 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Barang {
+  id        Int      @id @default(autoincrement())
+  kode      String   
+  nama      String
+  variants  Varian[]
+  stok      Int      @default(0)
+  hargaJual Float
+  hargaBeli Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Varian {
+  id        Int      @id @default(autoincrement())
+  warna     String
+  stok      Int      @default(0)
+  barangId  Int
+  barang    Barang   @relation(fields: [barangId], references: [id], onDelete: Cascade)
+
+  penjualan  Penjualan[]
+  belumBayar BelumBayar[]
+}
+
+// 1. MODEL UTAMA: Untuk menyimpan satu pesanan utuh (Header)
+model Transaksi {
+  id           Int      @id @default(autoincrement())
+  kodePesanan  String   @unique // Misal: INV-001
+  marketplace  String
+  tanggal      DateTime @default(now()) // Tanggal ini yang akan dikirim dari frontend
+  isRekap       Boolean    @default(false)
+  
+  // Relasi ke item-item yang dibeli dalam satu kode pesanan ini
+  items        Penjualan[]
+}
+
+// 2. MODEL DETAIL: Untuk menyimpan setiap produk dalam satu pesanan
+model Penjualan {
+  id           Int      @id @default(autoincrement())
+  transaksiId  Int      // Relasi ke Header Transaksi
+  varianId     Int
+  jumlah       Int
+  hargaJual    Float
+  hargaBeli    Float
+  totalAdmin   Float
+  zakat        Float
+  laba         Float
+  tanggal      DateTime @default(now()) // Tanggal per baris untuk backup
+
+  // Setup Relasi
+  transaksi    Transaksi @relation(fields: [transaksiId], references: [id], onDelete: Cascade)
+  varian       Varian    @relation(fields: [varianId], references: [id], onDelete: Restrict)
+}
+
+model Marketplace {
+  id           Int             @id @default(autoincrement())
+  namaToko     String          @unique @map("nama_toko")
+  status       Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  adminFees    JenisAdminFee[]
+}
+
+model JenisAdminFee {
+  id            Int         @id @default(autoincrement())
+  marketplaceId Int
+  jenisBiaya    String      @map("jenis_biaya")
+  tipeNominal   String      @map("tipe_nominal") // '%' atau 'Rp'
+  nominal       Float
+  status        Boolean     @default(true)
+  marketplace   Marketplace @relation(fields: [marketplaceId], references: [id], onDelete: Cascade)
+
+  @@map("jenis_admin_fee")
+}
+
+model BelumBayar {
+  id           Int      @id @default(autoincrement())
+  varianId     Int
+  kodePesanan  String
+  marketplace  String
+  jumlah       Int
+  hargaJual    Float
+  hargaBeli    Float
+  totalAdmin   Float
+  zakat        Float
+  laba         Float
+  createdAt    DateTime @default(now())
+  varian       Varian   @relation(fields: [varianId], references: [id], onDelete: Restrict)
+}
+
+// 3. MODEL REKAP: Tetap menggunakan String untuk tanggal agar mudah di-upsert per hari
+model Penghasilan {
+  id              Int      @id @default(autoincrement())
+  tanggal         String   // Tetap gunakan format 'YYYY-MM-DD'
+  hari            String   // Contoh: "Senin", "Selasa"
+  marketplace     String
+  totalUnit       Float
+  totalJual       Float
+  totalBeli       Float
+  totalAdmin      Float
+  totalZakat      Float
+  totalLabaBersih Float
+
+  @@unique([tanggal, marketplace]) // Mencegah data ganda di hari & toko yang sama
+  @@map("penghasilan")
+}
+
+model RekapHarian {
+  id            Int      @id @default(autoincrement())
+  tanggal       String   // format 'YYYY-MM-DD'
+  kodePesanan   String
+  kodeBarang    String
+  marketplace   String
+  namaBarang    String
+  jumlah        Int      
+  hargaJual     Float
+  hargaBeli     Float
+  totalAdmin    Float
+  zakat         Float
+  labaBersih    Float    
+  status        String   // "dikirim", "batal", "gagal kirim", "retur", dll
+
+  @@unique([kodePesanan, kodeBarang, namaBarang])  
+  @@map("rekapharian")
+}
