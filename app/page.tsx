@@ -724,7 +724,7 @@ useEffect(() => {
               className={`cursor-pointer bg-green-500 w-full py-2.5 rounded font-medium text-sm
                 ${isLoading ? "opacity-70 cursor-not-allowed" : ""}`}
             >
-              {isLoading ? (loadingAction || "Menyimpan...") : "Belum bayar"}
+              {isLoading ? (loadingAction || "Menyimpan...") : "Simpan belum bayar"}
             </button>          
         </div>
 

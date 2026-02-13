@@ -23,7 +23,7 @@ export default function BelumBayarPage() {
   const [items, setItems] = useState<BelumBayarItem[]>([]);
   const [searchKodePesanan, setSearchKodePesanan] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
-
+  const [loadingType, setLoadingType] = useState<"simpan"| "hapus" | null>(null)
   useEffect(() => {
     fetchItems();
   }, []);
@@ -39,12 +39,14 @@ export default function BelumBayarPage() {
       toast.warning("Pilih baris pesanan terlebih dahulu!");
       return;
     }
-
-    // Ambil kode pesanan dari baris terpilih
+    
     const selectedItem = items.find((item) => item.id === selectedId);
     if (!selectedItem) return;
+    
 
     if (confirm("Pindah pesanan ini ke Penjualan (sudah bayar)?")) {
+    setLoadingType("simpan"); // Mulai loading
+    try {
       const res = await fetch("/api/belumbayar/pindah", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -52,37 +54,49 @@ export default function BelumBayarPage() {
       });
 
       if (res.ok) {
-        toast.success("Berhasil dipindah ke Penjualan!");
-        fetchItems(); // Refresh tabel
+        toast.success("Berhasil dipindah!");
+        setSelectedId(null);
+        fetchItems();
       } else {
         toast.error("Gagal pindah!");
       }
+    } finally {
+      setLoadingType(null);
     }
-  };
+  }
+};
 
   const hapusBelumBayar = async () => {
-    if (!selectedId) {
+  // 1. Perbaikan urutan: Tampilkan toast dulu, baru return
+  if (!selectedId) {
     toast.warning("Pilih baris pesanan terlebih dahulu!");
     return;
   }
 
-  // Cari data item yang sedang dipilih untuk mendapatkan kodePesanan-nya
   const selectedItem = items.find((item) => item.id === selectedId);
   if (!selectedItem) return;
 
   if (confirm(`Hapus seluruh pesanan ${selectedItem.kodePesanan} dan kembalikan stok?`)) {
-    // Kirim DELETE dengan query parameter kodePesanan
-    const res = await fetch(`/api/belumbayar/${selectedId}?kodePesanan=${selectedItem.kodePesanan}`, { 
-      method: "DELETE" 
-    });
+    setLoadingType("hapus");
+    
+    try {
+      const res = await fetch(`/api/belumbayar/${selectedId}?kodePesanan=${selectedItem.kodePesanan}`, { 
+        method: "DELETE",
+      });
 
-    if (res.ok) {
-      toast.success("Berhasil dihapus satu paket dan stok dikembalikan!");
-      setSelectedId(null); // Reset pilihan
-      fetchItems(); // Refresh tabel
-    } else {
-      const err = await res.json();
-      toast.error("Gagal hapus: " + err.error);
+      if (res.ok) {
+        toast.success("Berhasil dihapus satu paket dan stok dikembalikan!");
+        setSelectedId(null);
+        fetchItems();
+      } else {
+        const err = await res.json();
+        toast.error("Gagal hapus: " + (err.error || "Terjadi kesalahan"));
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Terjadi kesalahan koneksi.");
+    } finally {
+      setLoadingType(null);
     }
   }
 };
@@ -199,11 +213,17 @@ export default function BelumBayarPage() {
                 HOME
              </button>
             </Link>
-          <button onClick={simpanSudahBayar} className="bg-yellow-300 px-6 py-2 rounded font-medium">
-            Simpan Sudah Bayar
+          <button onClick={simpanSudahBayar} 
+          disabled={loadingType !== null}
+          className="bg-yellow-300 px-6 py-2 rounded font-medium">
+            {loadingType === "simpan" ? "Memproses" : "Simpan sudah bayar"}
           </button>
-          <button onClick={hapusBelumBayar} className="bg-yellow-300 px-6 py-2 rounded font-medium">
-            Hapus Belum Bayar
+          <button 
+            onClick={hapusBelumBayar} 
+            disabled={loadingType !== null}
+            className="bg-yellow-300 px-6 py-2 rounded font-medium disabled:bg-gray-300"
+          >
+            {loadingType === "hapus" ? "Memproses..." : "Hapus Belum Bayar"}
           </button>
           <div className="flex-1 max-w-xs">
             <input
@@ -217,5 +237,4 @@ export default function BelumBayarPage() {
         </div>
       </div>
     </div>
-  );
-}
+  )};

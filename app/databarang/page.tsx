@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, useCallback } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { toast } from "sonner";
+import { Trash2 } from 'lucide-react';
 
 interface Barang {
   id: number;
@@ -43,6 +44,8 @@ export default function DataBarang() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchNama, setSearchNama] = useState("");
   const [searchKode, setSearchKode] = useState("");
+  const [loadingId, setLoadingId] = useState<string | number | null>(null);
+  const [loadingType, setLoadingType] = useState<"simpan"| "hapus" | "update" | "refresh" | null>(null)
 
   const [form, setForm] = useState({
     kode: "",
@@ -64,9 +67,9 @@ export default function DataBarang() {
     `/api/barang?page=${currentPage}&limit=50`,
     fetcher,
     {
-      revalidateOnFocus: false,     // opsional: matikan agar tidak refresh saat tab dibuka kembali
-      dedupingInterval: 30000,      // 30 detik — hindari request duplikat dalam waktu singkat
-      keepPreviousData: true,       // sangat berguna saat ganti halaman (UI tetap smooth)
+      revalidateOnFocus: false,
+      dedupingInterval: 30000, 
+      keepPreviousData: true,  
     }
   );
 
@@ -112,14 +115,15 @@ export default function DataBarang() {
     resetForm();
     setSearchNama("");
     setSearchKode("");
-    mutateBarangList(); // trigger re-fetch
+    mutateBarangList();
   };
 
   // ── CRUD Operations dengan revalidation SWR ────────────────────────────────
   const handleSaveNew = async () => {
     if (!form.kode.trim() || !form.nama.trim()) {
-      alert("Kode dan Nama Produk wajib diisi!");
+      toast.warning("Kode dan Nama Produk wajib diisi!");
       return;
+      
     }
 
     const payload = {
@@ -134,6 +138,8 @@ export default function DataBarang() {
           stok: Number(v.stok) || 0,
         })),
     };
+      setLoadingType("simpan")
+      const toasId = ("Sedang Menyimpan data...")
 
     try {
       const res = await fetch("/api/barang", {
@@ -144,14 +150,15 @@ export default function DataBarang() {
 
       if (!res.ok) throw new Error("Gagal menyimpan");
 
-      toast.success("Produk Baru & Varian Berhasil Disimpan!");
+      toast.success("Produk Baru & Varian Berhasil Disimpan!",{id:toasId});
       resetForm();
-      mutateBarangList(); // refresh list
-      // Optional: langsung ke halaman 1 agar produk baru terlihat
+      mutateBarangList(); 
       setCurrentPage(1);
     } catch (err) {
       console.error(err);
       toast.error("Gagal simpan produk baru");
+    }finally{
+      setLoadingType(null);
     }
   };
 
@@ -171,6 +178,8 @@ export default function DataBarang() {
           stok: Number(v.stok) || 0,
         })),
     };
+    setLoadingType("update")
+    const toasId= ("Sedang memperbarui data produk...")
 
     try {
       const res = await fetch(`/api/barang/${selectedId}`, {
@@ -181,27 +190,33 @@ export default function DataBarang() {
 
       if (!res.ok) throw new Error("Gagal update");
 
-      toast.success("Produk & Varian berhasil DIUPDATE!");
+      toast.success("Produk & Varian berhasil DIUPDATE!",{id: toasId});
       resetForm();
       mutateBarangList(); // refresh list
     } catch (err) {
       console.error(err);
       toast.error("Gagal update produk");
+    }finally{
+      setLoadingType(null);
     }
   };
 
   const handleDelete = async (id: number) => {
     if (!confirm("Yakin hapus produk ini beserta variannya?")) return;
+    setLoadingId(id);
+    const toasId = ("Sedang menghapus produk...")
 
     try {
       const res = await fetch(`/api/barang/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Gagal hapus");
 
-      toast.success("Produk berhasil dihapus!");
+      toast.success("Produk berhasil dihapus!",{id: toasId});
       mutateBarangList(); // refresh list
     } catch (err) {
       console.error(err);
       toast.error("Gagal menghapus produk");
+    } finally{
+      setLoadingId(null);
     }
   };
 
@@ -306,7 +321,6 @@ export default function DataBarang() {
                   required
                 />
               </div>
-
               <div className="mt-6 border-t pt-4">
                 <h3 className="text-lg font-medium mb-2">Varian / Warna</h3>
                 {inputVariants.map((v, index) => (
@@ -328,8 +342,7 @@ export default function DataBarang() {
                       type="button"
                       onClick={() => removeVariantField(index)}
                       className="bg-red-500 hover:bg-red-600 text-white px-2 py-1 rounded text-xs"
-                    >
-                      X
+                    ><><Trash2></Trash2></>
                     </button>
                   </div>
                 ))}
@@ -370,22 +383,29 @@ export default function DataBarang() {
                   <button
                     type="button"
                     onClick={handleSaveNew}
+                    disabled= {loadingType !== null}
                     className="bg-green-600 hover:bg-green-700 text-white font-medium py-3 rounded text-sm"
                   >
-                    SIMPAN BARU
+                    {loadingType === "simpan" ? (
+                      <span className=" flex item-center gap-2">
+                      <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                      </svg>Memproses...
+                      </span>
+                    ):("Simpan Baru")}
                   </button>
 
                   <button
                     type="button"
                     onClick={handleUpdate}
-                    disabled={!selectedId}
+                    disabled={!selectedId || loadingType !== null}
                     className={`font-medium py-3 rounded text-sm ${
                       selectedId
                         ? "bg-blue-600 hover:bg-blue-700 text-white"
                         : "bg-gray-300 text-gray-500 cursor-not-allowed"
                     }`}
                   >
-                    UPDATE DATA
+                    {loadingType === "update" ?  "Memproses..." : "Update Data"}
                   </button>
                 </div>
 
@@ -393,9 +413,10 @@ export default function DataBarang() {
                   <button
                     type="button"
                     onClick={handleRefresh}
+                    disabled={loadingType !== null}
                     className="bg-yellow-400 hover:bg-yellow-500 text-black font-medium py-3 rounded text-sm"
                   >
-                    BERSIHKAN / REFRESH
+                    {loadingType === "refresh" ? "Loading...": "Refresh"}
                   </button>
 
                   {selectedId && (
@@ -480,11 +501,24 @@ export default function DataBarang() {
                             >
                               Edit
                             </button>
-                            <button
+                            <button              
                               onClick={() => handleDelete(barang.id)}
-                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs"
+                              // Tombol non-aktif jika sedang ada proses hapus di baris MANAPUN
+                              disabled={loadingId !== null}
+                              className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs flex items-center gap-1 disabled:bg-red-300 transition-all"
                             >
-                              Hapus
+                              {/* CEK SPESIFIK: Apakah ID barang ini yang sedang diproses? */}
+                              {loadingId === barang.id ? (
+                                <>
+                                  <Trash2 className="w-3 h-3 animate-spin" />
+                                  <span>Memproses..</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Trash2 className="w-3 h-3" />
+                                  <span></span>
+                                </>
+                              )}
                             </button>
                           </td>
                         </tr>

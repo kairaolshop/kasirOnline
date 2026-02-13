@@ -214,7 +214,7 @@ const handleRefresh = async () => {
           <button 
             onClick={simpanDataPenjualan}
             disabled={loadingType !== null}
-            className={`px-4 py-2 rounded ${loadingType ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-400'}`}>
+            className={`px-4 py-2 rounded ${loadingType === "simpan" ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-400'}`}>
             {loadingType === "simpan" ? (
             <span className="flex items-center gap-2">
               <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
