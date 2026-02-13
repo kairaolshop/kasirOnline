@@ -12,34 +12,35 @@ const handler = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-  if (!credentials?.username || !credentials?.password) {
-    return null;
-  }
+        if (!credentials?.username || !credentials?.password) {
+          throw new Error("Username dan password wajib diisi");
+        }
 
-  const username = credentials.username as string;
-  const password = credentials.password as string;
+        const user = await prisma.user.findUnique({
+          where: { username: credentials.username },
+        });
 
-  try {
-    const user = await prisma.user.findUnique({
-      where: { username },
-    });
+        if (!user) {
+          throw new Error("User tidak ditemukan");
+        }
 
-    if (!user) return null;
+        // Cek password menggunakan bcrypt
+        const isPasswordValid = await bcrypt.compare(
+          credentials.password,
+          user.password
+        );
 
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+        if (!isPasswordValid) {
+          throw new Error("Password salah");
+        }
 
-    if (!isPasswordValid) return null;
-
-    return {
-      id: user.id.toString(),
-      name: user.username,
-      role: user.role,
-    };
-  } catch (error) {
-    console.error("Error authorize:", error);
-    return null;
-  }
-},
+        // Return object user (akan disimpan di JWT)
+        return {
+          id: user.id.toString(),
+          name: user.username,
+          role: user.role, // Memasukkan role dari model baru kamu
+        };
+      },
     }),
   ],
 
@@ -65,7 +66,7 @@ const handler = NextAuth({
   },
 
   pages: {
-    signIn: "/app/login",
+    signIn: "/login",
   },
   secret: process.env.NEXTAUTH_SECRET,
 });
