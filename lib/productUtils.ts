@@ -3,6 +3,7 @@ export interface ProdukSuggestion {
   id: number;               // ID dari salah satu (bisa diambil yang pertama)
   kode: string;
   nama: string;
+  stok: string;
   hargaJual: number;
   hargaBeli: number;
   variants: Varian[];       // Gabungan semua varian dari duplikat

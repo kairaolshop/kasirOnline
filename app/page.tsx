@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { searchProduk, ProdukSuggestion } from "@/lib/productUtils";
 import { signOut, useSession } from "next-auth/react";
+import {toast} from "sonner"
 
 import Link from "next/link";
 
@@ -43,6 +44,10 @@ export default function Home() {
   const [hargaJual, setHargaJual] = useState("");
   const [hargaBeli, setHargaBeli] = useState("");
   const [jumlahTerjual, setJumlahTerjual] = useState("");
+  const [kodeError, setKodeError] = useState<string | null>(null);
+  const [isCheckingKode, setIsCheckingKode] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<string>("");
 
   // Keranjang & Tabel
   const [keranjang, setKeranjang] = useState<KeranjangItem[]>([]);
@@ -152,13 +157,32 @@ export default function Home() {
 
   const tambahKeKeranjang = async () => {
     if (!kodePesanan || !namaProduk || !kodeProduk || !jumlahTerjual || !marketplace) {
-      alert("Lengkapi semua field + pilih marketplace!");
+      toast.warning("Lengkapi semua field + pilih marketplace!");
       return;
     }
+    const jumlahNum = Number(jumlahTerjual);
+  if (jumlahNum <= 0) {
+    toast.warning("Jumlah terjual harus lebih dari 0!");
+    return;
+  }
+
+  const varianTerpilih = selectedProduk?.variants?.find(v => v.warna === warna);
+
+  if (!varianTerpilih) {
+    toast.error("Varian/warna belum dipilih atau tidak ditemukan!");
+    return;
+  }
+
+  if (varianTerpilih.stok < jumlahNum) {
+    toast.error(
+      `Stok varian "${varianTerpilih.warna}" hanya tersisa ${varianTerpilih.stok} pcs!\n` +
+      `Kamu meminta ${jumlahNum} pcs. Kurangi jumlah atau pilih varian lain.`
+    );
+    return;
+  }
 
     const hargaJualNum = Number(hargaJual) || 0;
     const hargaBeliNum = Number(hargaBeli) || 0;
-    const jumlahNum = Number(jumlahTerjual);
 
     // Hitung laba dengan harga beli real
     const { totalAdmin, totalZakat, labaBersih } = await calculateLaba(
@@ -235,6 +259,8 @@ export default function Home() {
       alert("Keranjang kosong!");
       return;
     }
+    setIsLoading(true);
+    setLoadingAction("Menyimpan transaksi...");
 
     try {
       const payload = {
@@ -268,56 +294,70 @@ export default function Home() {
       const data = await resHarian.json();
       setPenjualanHarian(data);
 
-      alert("Data berhasil disimpan!");
+      toast.success("Data berhasil disimpan!");
     } catch (error) {
       console.error(error);
-      alert("Gagal menyimpan data.");
+      toast.error("Gagal menyimpan data.");
+    } finally {
+      setIsLoading(false);
+      setLoadingAction("");
     }
   };
 
   const handleDelete = async (id: number) => {
   if (!confirm(`Hapus transaksi ini? Stok akan dikembalikan.`)) return;
-
+    setIsLoading(true);
+    setLoadingAction("Menghapus transaksi...");
   try {
     const res = await fetch(`/api/penjualan?id=${id}`, { method: 'DELETE' });
     
     if (res.ok) {
       const resHarian = await fetch('/api/penjualan');
       setPenjualanHarian(await resHarian.json());
-      alert("Transaksi berhasil dihapus.");
+      toast.success("Transaksi berhasil dihapus.");
     } else {
       const errorData = await res.json();
-      alert(`Gagal hapus: ${errorData.error}`);
+      toast.error(`Gagal hapus: ${errorData.error}`);
     }
   } catch (error) {
     alert("Terjadi kesalahan sistem.");
+  }finally {
+    setIsLoading(false);
+    setLoadingAction("");
   }
   };
 
   const handleReset = async () => {
   if (!confirm('Yakin ingin reset database penjualan? Semua data akan hilang!')) return;
-
+    setIsLoading(true);
+    setLoadingAction("Mereset database...");
   try {
     const res = await fetch('/api/penjualan/reset', { method: 'POST' });
     if (!res.ok) throw new Error('Reset gagal');
     setPenjualanHarian([]);
     setKeranjang([]);
+    localStorage.removeItem("cachedPenjualanHarian");
     const resHarian = await fetch('/api/penjualan');
     const freshData = await resHarian.json();
     setPenjualanHarian(freshData);
 
-    alert('Reset berhasil! Data penjualan sudah dikosongkan.');
+    toast.success('Reset berhasil! Data penjualan sudah dikosongkan.');
   } catch (error) {
     console.error('Reset error:', error);
-    alert('Gagal reset database. Coba lagi atau cek console.');
+    toast.error('Gagal reset database. Coba lagi atau cek console.');
+  }finally {
+    setIsLoading(false);
+    setLoadingAction("");
   }
   };
 
   const simpanBelumBayar = async () => {
   if (keranjang.length === 0) {
-    alert("Keranjang masih kosong!");
+    toast.warning("Keranjang masih kosong!");
     return;
   }
+  setIsLoading(true);
+  setLoadingAction("Menyimpan ke Belum Bayar...");
 
   try {
     const res = await fetch("/api/belumbayar", {
@@ -327,7 +367,7 @@ export default function Home() {
     });
 
     if (res.ok) {
-      alert("Berhasil simpan ke status Belum Bayar! Stok telah dikurangi.");
+      toast.success("Berhasil simpan ke status Belum Bayar! Stok telah dikurangi.");
       // Bersihkan form dan keranjang setelah berhasil
       setKeranjang([]);
       setMarketplace("");
@@ -338,7 +378,10 @@ export default function Home() {
     }
   } catch (error) {
     console.error("Error simpan belum bayar:", error);
-    alert("Terjadi kesalahan sistem saat menyimpan.");
+    toast.error("Terjadi kesalahan sistem saat menyimpan.");
+  }finally {
+    setIsLoading(false);
+    setLoadingAction("");
   }
   };
 
@@ -346,7 +389,8 @@ export default function Home() {
 const rekapHarian = async () => {
   const hariIni = new Date().toLocaleDateString("id-ID");
   if (!confirm(`Rekap & pindah penjualan hari ini (${hariIni}) ke Rekap Harian? Data harian akan direset.`)) return;
-
+  setIsLoading(true);
+  setLoadingAction("Melakukan rekap harian...");
   try {
     const res = await fetch("/api/penjualan/rekap-harian", {
       method: "POST",
@@ -355,7 +399,7 @@ const rekapHarian = async () => {
     });
 
     if (res.ok) {
-      alert("Rekap harian berhasil!");
+      toast.success("Rekap harian berhasil!");
       localStorage.removeItem("cachedPenjualanHarian");
       
       // 3. Opsional: Update tanggal terakhir rekap jika diperlukan
@@ -363,11 +407,14 @@ const rekapHarian = async () => {
       
     } else {
       const err = await res.json();
-      alert("Gagal rekap: " + (err.error || err.message));
+      toast.error("Gagal rekap: " + (err.error || err.message));
     }
   } catch (err) {
     alert("Terjadi kesalahan koneksi ke server");
     console.error(err);
+  } finally {
+    setIsLoading(false);
+    setLoadingAction("");
   }
 };
 
@@ -377,6 +424,49 @@ const rekapHarian = async () => {
     if (n.includes("tiktok")) return "text-green-500 font-bold";
     return "";
   };
+
+  const debounce = (func: Function, delay: number) => {
+  let timer: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timer);
+    timer = setTimeout(() => func(...args), delay);
+  };
+};
+// Fungsi cek ke API
+const checkKodeDuplikat = async (kode: string) => {
+  if (!kode.trim()) return;
+
+  setIsCheckingKode(true);
+
+  try {
+    const res = await fetch(`/api/cek-kode-belumbayar?kode=${encodeURIComponent(kode.trim())}`);
+    const data = await res.json();
+
+    if (data.exists) {
+      toast.error(
+        `Kode Pesanan Duplikat`,
+        {
+          description: `Kode "${kode.trim()}" sudah terdaftar di Belum Bayar.`,
+          action: {
+            label: 'Lihat Detail',
+            onClick: () => window.location.href = '/belumbayar',
+          },
+          duration: 8000, // lebih lama biar dibaca
+        }
+      );
+    }
+  } catch (err) {
+    toast.error('Gagal memeriksa kode pesanan');
+  } finally {
+    setIsCheckingKode(false);
+  }
+};
+const debouncedCheck = debounce(checkKodeDuplikat, 500);
+
+useEffect(() => {
+  debouncedCheck(kodePesanan);
+}, [kodePesanan]);
+
   return (
     <div className="min-h-screen bg-[#c9d7ff] p-4 font-sans">
       {/* Header */}
@@ -459,13 +549,25 @@ const rekapHarian = async () => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 lg:h-[calc(80vh-300px)]">
         {/* Form kiri */}
         <div className="bg-white rounded-lg shadow p-4 space-y-3">
-        <input
-          type="text"
-          placeholder="Kode pesanan"
-          value={kodePesanan}
-          onChange={(e) => setKodePesanan(e.target.value)}
-          className="w-full border rounded px-3 py-2 text-sm"
-        />
+        <div className="relative">
+          <label className="block text-sm font-medium mb-1">Kode Pesanan</label>
+          <input
+            type="text"
+            placeholder="Masukkan kode pesanan"
+            value={kodePesanan}
+            onChange={(e) => {
+              setKodePesanan(e.target.value);
+            }}
+            className={`w-full border rounded px-4 py-2.5 text-sm transition-all duration-200
+              focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-blue-400
+              ${isCheckingKode ? "border-blue-400" : "border-gray-300"}`}
+          />
+          {isCheckingKode && (
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+            </div>
+          )}
+        </div>
         <div className="flex gap-2 relative">
         <input
           type="text"
@@ -570,23 +672,52 @@ const rekapHarian = async () => {
           onChange={(e) => setJumlahTerjual(e.target.value)}
           className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
         />
-
         <button
           onClick={tambahKeKeranjang}
-          className="cursor-pointer bg-yellow-400 w-full py-2.5 rounded font-medium text-sm"
+          disabled={
+            isLoading ||
+            !selectedProduk ||
+            !warna ||
+            Number(jumlahTerjual) <= 0 ||
+            !marketplace ||
+            !kodePesanan.trim() ||
+            (selectedProduk?.variants?.find(v => v.warna === warna)?.stok || 0) < 
+              (Number(jumlahTerjual) || 1)
+          }
+          className={`w-full py-2.5 rounded font-medium text-sm transition-all duration-200
+            ${
+              (isLoading ||
+              !selectedProduk ||
+              !warna ||
+              Number(jumlahTerjual) <= 0 ||
+              !marketplace ||
+              !kodePesanan.trim() ||
+              (selectedProduk?.variants?.find(v => v.warna === warna)?.stok || 0) < 
+                (Number(jumlahTerjual) || 1)
+              )
+                ? "bg-yellow-300 opacity-60 cursor-not-allowed text-gray-700"
+                : "bg-yellow-400 hover:bg-yellow-500 cursor-pointer text-black"
+            }`}
         >
-          Add Cart
-        
-          </button>
+          {isLoading ? "Memproses..." : "Add Cart"}
+        </button>
           <button 
           onClick={handleSimpan}
-          className="cursor-pointer bg-cyan-400 w-full py-2 rounded text-sm">SIMPAN</button>  
+          disabled={isLoading}
+          className={`cursor-pointer bg-cyan-400 w-full py-2 rounded text-sm
+              ${isLoading ? "opacity-70 cursor-not-allowed" : ""}`}
+          >
+            {isLoading ? (loadingAction || "Menyimpan...") : "SIMPAN"}
+          </button>
 
           <button 
-          onClick={simpanBelumBayar}
-          className="cursor-pointer bg-green-500 w-full py-2.5 rounded font-medium text-sm">
-            Belum bayar
-          </button>          
+              onClick={simpanBelumBayar}
+              disabled={isLoading}
+              className={`cursor-pointer bg-green-500 w-full py-2.5 rounded font-medium text-sm
+                ${isLoading ? "opacity-70 cursor-not-allowed" : ""}`}
+            >
+              {isLoading ? (loadingAction || "Menyimpan...") : "Belum bayar"}
+            </button>          
         </div>
 
         {/* Tabel Penjualan Harian */}
@@ -736,6 +867,16 @@ const rekapHarian = async () => {
           🖨️ Print PDF
         </button>
       </div>
+      {isLoading && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center gap-4">
+            <div className="animate-spin h-10 w-10 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+            <p className="text-lg font-medium text-gray-800">
+              {loadingAction || "Sedang memproses..."}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
