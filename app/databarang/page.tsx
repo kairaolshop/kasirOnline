@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, useCallback } from "react";
 import useSWR, { useSWRConfig } from "swr";
+import { toast } from "sonner";
 
 interface Barang {
   id: number;
@@ -143,14 +144,14 @@ export default function DataBarang() {
 
       if (!res.ok) throw new Error("Gagal menyimpan");
 
-      alert("Produk Baru & Varian Berhasil Disimpan!");
+      toast.success("Produk Baru & Varian Berhasil Disimpan!");
       resetForm();
       mutateBarangList(); // refresh list
       // Optional: langsung ke halaman 1 agar produk baru terlihat
       setCurrentPage(1);
     } catch (err) {
       console.error(err);
-      alert("Gagal simpan produk baru");
+      toast.error("Gagal simpan produk baru");
     }
   };
 
@@ -180,12 +181,12 @@ export default function DataBarang() {
 
       if (!res.ok) throw new Error("Gagal update");
 
-      alert("Produk & Varian berhasil DIUPDATE!");
+      toast.success("Produk & Varian berhasil DIUPDATE!");
       resetForm();
       mutateBarangList(); // refresh list
     } catch (err) {
       console.error(err);
-      alert("Gagal update produk");
+      toast.error("Gagal update produk");
     }
   };
 
@@ -196,11 +197,11 @@ export default function DataBarang() {
       const res = await fetch(`/api/barang/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Gagal hapus");
 
-      alert("Produk berhasil dihapus!");
+      toast.success("Produk berhasil dihapus!");
       mutateBarangList(); // refresh list
     } catch (err) {
       console.error(err);
-      alert("Gagal menghapus produk");
+      toast.error("Gagal menghapus produk");
     }
   };
 

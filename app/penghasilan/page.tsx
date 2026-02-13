@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import useSWR from "swr";
 
 interface PenghasilanItem {
@@ -26,6 +27,7 @@ export default function PenghasilanPage() {
   const [rekapTanggal, setRekapTanggal] = useState<string>("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [page, setPage] = useState(1);
+  const [loadingType, setLoadingType] = useState<"simpan" | "hapus" | "refresh" | null >(null);
 
   const queryParams = new URLSearchParams();
   queryParams.append("page", page.toString());
@@ -35,7 +37,7 @@ export default function PenghasilanPage() {
     queryParams.append("marketplace", marketplaceFilter);
   }
 
-  const { data: response, isLoading, mutate } = useSWR<{ data: PenghasilanItem[], metadata: any }>(
+  const { data: response, mutate } = useSWR<{ data: PenghasilanItem[], metadata: any }>(
   `/api/penghasilan?${queryParams.toString()}`,
   fetcher,
   {
@@ -43,8 +45,18 @@ export default function PenghasilanPage() {
     dedupingInterval: 5000,
   }
 );
+
 const displayData = response?.data || [];
 const metadata = response?.metadata;
+
+const handleRefresh = async () => {
+  setLoadingType("refresh");
+  try{
+    await mutate();
+    toast.success("Data di perbarui");
+  } catch (err) {toast.error(" Gagal memperbarui data");}
+  finally{setLoadingType(null);}
+};
 
   useEffect(() => {
     const fetchMarketplaces = async () => {
@@ -54,7 +66,6 @@ const metadata = response?.metadata;
     };
     fetchMarketplaces();
 
-    // Ambil tanggal terakhir dari kasir
     const saved = localStorage.getItem('lastTransactionDate');
     if (saved) {
       setRekapTanggal(saved);
@@ -70,14 +81,16 @@ const metadata = response?.metadata;
     setBulan("");
     setTahun("");
     setMarketplaceFilter("Semua Marketplace");
-    // SWR akan otomatis mendeteksi perubahan state dan fetch ulang
+    
   };
 
   const simpanDataPenjualan = async () => {
-    if (!rekapTanggal) return alert("Belum ada tanggal dipilih");
+    if (!rekapTanggal) return toast.error("Belum ada tanggal dipilih");
 
     const confirmAction = confirm(`Ringkas semua transaksi tanggal ${rekapTanggal}?`);
     if (!confirmAction) return;
+    setLoadingType("simpan");
+    const toasId = toast.loading("sedang meringkas data...")
 
     try {
       const res = await fetch("/api/penghasilan", {
@@ -86,31 +99,38 @@ const metadata = response?.metadata;
         body: JSON.stringify({ tanggal: rekapTanggal })
       });
 
+      const result = await res.json();
       if (res.ok) {
-        alert("Berhasil diringkas!");
-        mutate(); // Segarkan tabel secara instan
+        toast.success("Berhasil diringkas!",{id: toasId});
+        mutate();
       } else {
         const result = await res.json();
-        alert(result.message || "Gagal meringkas data");
+        toast.error(result.message || "Gagal meringkas data");
       }
     } catch (err) {
       alert("Terjadi kesalahan sistem.");
+    } finally{
+      setLoadingType(null);
     }
   };
 
   const hapusTerpilih = async () => {
     if (!selectedId) return alert("Pilih baris data terlebih dahulu!");
     if (!confirm("Hapus baris ini?")) return;
-
+    const toasId = toast.loading("Sedang menghapus data...")
+    setLoadingType("hapus");
     try {
       const res = await fetch(`/api/penghasilan/${selectedId}`, { method: "DELETE" });
+      
       if (res.ok) {
-        alert("Data berhasil dihapus");
+        toast.success("Data berhasil dihapus",{id: toasId});
         setSelectedId(null);
-        mutate(); // Segarkan tabel
+        mutate();
       }
     } catch (err) {
-      alert("Terjadi kesalahan koneksi.");
+      toast.error("Terjadi kesalahan koneksi.");
+    } finally{
+      setLoadingType(null);
     }
   };
 
@@ -183,27 +203,44 @@ const metadata = response?.metadata;
           >
             Reset
           </button>
-
           <button 
-            onClick={mutate as any}
+            onClick={handleRefresh}
+            disabled={loadingType !== null}
             className="cursor-pointer bg-cyan-500 text-white px-6 py-2 rounded font-medium hover:bg-cyan-600"
           >
-            {isLoading ? "Loading..." : "Refresh Data"}
+            {loadingType === "refresh" ? "Loading..." : "Refresh Data"}
           </button>
 
           <button 
             onClick={simpanDataPenjualan}
-            className="cursor-pointer bg-green-600 text-white px-6 py-2 rounded font-medium hover:bg-green-700"
-          >
-            Rekap Data ({rekapTanggal})
-          </button>
-
+            disabled={loadingType !== null}
+            className={`px-4 py-2 rounded ${loadingType ? 'bg-gray-400 cursor-not-allowed' : 'bg-green-400'}`}>
+            {loadingType === "simpan" ? (
+            <span className="flex items-center gap-2">
+              <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                {/* SVG Spinner Circle */}
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Memproses...
+            </span>
+          ) : ( `Simpan rekap (${rekapTanggal})`
+          )}
+        </button>
           <button 
             onClick={hapusTerpilih}
-            disabled={!selectedId}
-            className={` px-6 py-2 rounded font-medium text-white ${selectedId ? "bg-red-500" : "bg-red-100 cursor-not-allowed"}`}
+            disabled={!selectedId || loadingType !== null}
+            className={` px-6 py-2 rounded font-medium text-white ${selectedId || loadingType ? "bg-red-500" : "bg-red-100 cursor-not-allowed"}`}
           >
-            Hapus Baris
+            {loadingType === "hapus" ? (
+              <span className="flex item-center gap-2">
+                <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg> 
+                Memproses...
+              </span>
+            ):("Hapus rekap")}
           </button>
 
           <Link href="/">
@@ -230,7 +267,7 @@ const metadata = response?.metadata;
         </tr>
       </thead>
       <tbody className="bg-white divide-y divide-gray-200">
-        {isLoading ? (
+        {loadingType ? (
           <tr>
             <td colSpan={10} className="p-10 text-center animate-pulse text-gray-500">
               Sedang mengambil data...

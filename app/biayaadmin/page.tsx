@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 import useSWR from "swr";
 
 interface Marketplace {
@@ -88,11 +89,11 @@ export default function SettingAdmin() {
       });
 
       if (res.ok) {
-        alert("Jenis Biaya Admin berhasil ditambahkan.");
+        toast.success("Jenis Biaya Admin berhasil ditambahkan.");
         mutate();
         clearForm();
       } else {
-        alert("Gagal menyimpan!");
+        toast.error("Gagal menyimpan!");
       }
     } catch (err) {
       alert("Terjadi kesalahan!");
@@ -120,11 +121,11 @@ export default function SettingAdmin() {
       });
 
       if (res.ok) {
-        alert("Data berhasil diupdate.");
+        toast.success("Data berhasil diupdate.");
         mutate();
         clearForm();
       } else {
-        alert("Gagal update!");
+        toast.error("Gagal update!");
       }
     } catch (err) {
       alert("Terjadi kesalahan!");
@@ -133,7 +134,7 @@ export default function SettingAdmin() {
 
   const hapusAdmin = async () => {
     if (!selectedId) {
-      alert("Pilih data terlebih dahulu!");
+      toast.warning("Pilih data terlebih dahulu!");
       return;
     }
 
@@ -142,11 +143,11 @@ export default function SettingAdmin() {
         const res = await fetch(`/api/adminfee/${selectedId}`, { method: "DELETE" });
 
         if (res.ok) {
-          alert("Data berhasil dihapus.");
+          toast.success("Data berhasil dihapus.");
           mutate();
           clearForm();
         } else {
-          alert("Gagal hapus!");
+          toast.error("Gagal hapus!");
         }
       } catch (err) {
         alert("Terjadi kesalahan!");
@@ -156,7 +157,7 @@ export default function SettingAdmin() {
 
   const aktifkanAdmin = async () => {
     if (!selectedId) {
-      alert("Pilih data terlebih dahulu!");
+      toast.warning("Pilih data terlebih dahulu!");
       return;
     }
 
@@ -168,11 +169,11 @@ export default function SettingAdmin() {
       });
 
       if (res.ok) {
-        alert("Data berhasil diaktifkan.");
+        toast.success("Data berhasil diaktifkan.");
         mutate();
         clearForm();
       } else {
-        alert("Gagal mengaktifkan!");
+        toast.error("Gagal mengaktifkan!");
       }
     } catch (err) {
       alert("Terjadi kesalahan!");
@@ -181,7 +182,7 @@ export default function SettingAdmin() {
 
   const nonaktifkanAdmin = async () => {
     if (!selectedId) {
-      alert("Pilih data terlebih dahulu!");
+      toast.warning("Pilih data terlebih dahulu!");
       return;
     }
 
@@ -193,11 +194,11 @@ export default function SettingAdmin() {
       });
 
       if (res.ok) {
-        alert("Data berhasil dinonaktifkan.");
+        toast.success("Data berhasil dinonaktifkan.");
         mutate();
         clearForm();
       } else {
-        alert("Gagal menonaktifkan!");
+        toast.error("Gagal menonaktifkan!");
       }
     } catch (err) {
       alert("Terjadi kesalahan!");

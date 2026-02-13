@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect, Fragment } from "react";
 import Link from "next/link";
 import useSWR from "swr";
+import { toast } from "sonner";
 
 const fetcher = (url: string) => fetch(url).then(r => r.json());
 
@@ -65,12 +66,12 @@ export default function TransaksiPage() {
     });
 
     if (res.ok) {
-      alert("Status berhasil diperbarui");
+      toast.success("Status berhasil diperbarui");
       setSelectedItem(null);
       setStatusBaru("");
       mutate();
     } else {
-      alert("Gagal memperbarui status");
+      toast.error("Gagal memperbarui status");
     }
   };
 

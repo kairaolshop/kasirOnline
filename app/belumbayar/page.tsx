@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { toast } from "sonner";
 
 interface BelumBayarItem {
   id: number;
@@ -35,7 +36,7 @@ export default function BelumBayarPage() {
 
   const simpanSudahBayar = async () => {
     if (!selectedId) {
-      alert("Pilih baris pesanan terlebih dahulu!");
+      toast.warning("Pilih baris pesanan terlebih dahulu!");
       return;
     }
 
@@ -51,17 +52,17 @@ export default function BelumBayarPage() {
       });
 
       if (res.ok) {
-        alert("Berhasil dipindah ke Penjualan!");
+        toast.success("Berhasil dipindah ke Penjualan!");
         fetchItems(); // Refresh tabel
       } else {
-        alert("Gagal pindah!");
+        toast.error("Gagal pindah!");
       }
     }
   };
 
   const hapusBelumBayar = async () => {
     if (!selectedId) {
-    alert("Pilih baris pesanan terlebih dahulu!");
+    toast.warning("Pilih baris pesanan terlebih dahulu!");
     return;
   }
 
@@ -76,12 +77,12 @@ export default function BelumBayarPage() {
     });
 
     if (res.ok) {
-      alert("Berhasil dihapus satu paket dan stok dikembalikan!");
+      toast.success("Berhasil dihapus satu paket dan stok dikembalikan!");
       setSelectedId(null); // Reset pilihan
       fetchItems(); // Refresh tabel
     } else {
       const err = await res.json();
-      alert("Gagal hapus: " + err.error);
+      toast.error("Gagal hapus: " + err.error);
     }
   }
 };
