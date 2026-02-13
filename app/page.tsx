@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { searchProduk, ProdukSuggestion } from "@/lib/productUtils";
+import { signOut, useSession } from "next-auth/react";
+
 import Link from "next/link";
 
 interface Marketplace {
@@ -27,6 +29,7 @@ interface KeranjangItem {
 }
 
 export default function Home() {
+  const { data: session } = useSession();
   // ==================== STATE ====================
   const [isMounted, setIsMounted] = useState(false);
 
@@ -410,6 +413,10 @@ const rekapHarian = async () => {
             <Link href="/rekapharian">
             <button className="cursor-pointer bg-purple-600 text-white px-3 py-1.5 rounded text-sm">Open Transaksi</button>
             </Link>
+            <button
+            className="cursor-pointer bg-red-100 text-red-600 hover:bg-red-600 hover:text-white px-4 py-2 rounded-lg text-sm font-bold transition-all border border-red-200"
+              onClick={() => signOut ({callbackUrl: "/login"})}>logout              
+            </button>
           </div>
         </div>
 
