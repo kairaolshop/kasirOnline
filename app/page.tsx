@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { searchProduk, ProdukSuggestion } from "@/lib/productUtils";
+import { useRouter } from "next/navigation";
 import { signOut, useSession } from "next-auth/react";
 import {toast} from "sonner"
 
@@ -30,7 +31,8 @@ interface KeranjangItem {
 }
 
 export default function Home() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
+  const router = useRouter();
   // ==================== STATE ====================
   const [isMounted, setIsMounted] = useState(false);
 
@@ -58,9 +60,8 @@ export default function Home() {
   // Tanggal
   const [tanggalInput, setTanggalInput] = useState<string>("");
 
-  // ==================== USEEFFECT ====================
-
-  // Mount & Load dari localStorage
+  // ==================== USEEFFECT ===================
+  
   useEffect(() => {
     setIsMounted(true);
 
@@ -466,6 +467,13 @@ const debouncedCheck = debounce(checkKodeDuplikat, 500);
 useEffect(() => {
   debouncedCheck(kodePesanan);
 }, [kodePesanan]);
+
+useEffect(() => {
+    if (!session && isMounted) {
+      router.replace("/login");
+    }
+  }, [session, isMounted, router]);
+  if (!isMounted) return null;
 
   return (
     <div className="min-h-screen bg-[#c9d7ff] p-4 font-sans">

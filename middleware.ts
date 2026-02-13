@@ -4,35 +4,34 @@ import { NextResponse } from "next/server";
 
 export default withAuth(
   function middleware(req) {
-    const token = (req as any).nextauth?.token;
-    const isAuth = !!token;
-    
-    // PERBAIKAN: Hapus "/app" dari path
-    const isAuthPage = req.nextUrl.pathname.startsWith("/login");
+    const { pathname } = req.nextUrl;
+    const token = req.nextauth.token;
 
-    if (isAuthPage) {
-      if (isAuth) {
-        return NextResponse.redirect(new URL("/", req.url));
-      }
-      return null;
+    // JIKA sudah login dan mencoba ke /login, lempar ke dashboard (/)
+    if (pathname === "/login" && token) {
+      return NextResponse.redirect(new URL("/", req.url));
     }
 
     return NextResponse.next();
   },
   {
     callbacks: {
-      authorized: ({ token }: { token: any }) => !!token,
+      // Izinkan akses jika ada token, ATAU jika halaman yang diakses adalah /login
+      authorized: ({ token, req }) => {
+        const { pathname } = req.nextUrl;
+        if (pathname === "/login") return true; 
+        return !!token;
+      },
     },
     pages: {
-      // PERBAIKAN: Gunakan path URL asli
-      signIn: "/login", 
+      signIn: "/login",
     },
   }
 );
 
 export const config = {
+  // Pastikan /login masuk ke dalam matcher agar middleware bisa memprosesnya
   matcher: [
-    // Melindungi semua kecuali login dan file statis
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|login).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
   ],
 };
