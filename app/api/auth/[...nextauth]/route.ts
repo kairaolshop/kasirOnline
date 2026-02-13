@@ -23,8 +23,6 @@ const handler = NextAuth({
         if (!user) {
           throw new Error("User tidak ditemukan");
         }
-
-        // Cek password menggunakan bcrypt
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
           user.password
@@ -33,12 +31,10 @@ const handler = NextAuth({
         if (!isPasswordValid) {
           throw new Error("Password salah");
         }
-
-        // Return object user (akan disimpan di JWT)
         return {
           id: user.id.toString(),
           name: user.username,
-          role: user.role, // Memasukkan role dari model baru kamu
+          role: user.role,
         };
       },
     }),

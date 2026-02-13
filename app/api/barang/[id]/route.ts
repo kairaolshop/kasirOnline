@@ -21,26 +21,31 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = await params; // Ambil ID dari promise params
+    const { id } = await params;
     const idNumber = Number(id);
     const body = await request.json();
 
-    const { kode, nama, stok, hargaJual, hargaBeli, variants } = body;
+    // Pastikan stok dihitung dari total semua varian jika tidak dikirim dari form
+    const { kode, nama, hargaJual, hargaBeli, variants } = body;
 
-    // Gunakan Transaction agar jika salah satu gagal, semua dibatalkan
+    // Hitung total stok dari array variants agar field 'stok' di Barang tetap terisi
+    const totalStok = variants && variants.length > 0 
+      ? variants.reduce((acc: number, v: any) => acc + Number(v.stok || 0), 0)
+      : 0;
+
     const updated = await prisma.$transaction(async (tx) => {
-      // 1. Hapus semua varian lama berdasarkan idNumber yang sudah di-unwrap
+      // 1. Hapus varian lama
       await tx.varian.deleteMany({
         where: { barangId: idNumber },
       });
 
-      // 2. Update data barang dan buat varian baru
+      // 2. Update data barang
       return await tx.barang.update({
         where: { id: idNumber },
         data: {
           kode,
           nama,
-          stok: Number(stok),
+          stok: totalStok, // Gunakan hasil perhitungan total stok varian
           hargaJual: Number(hargaJual),
           hargaBeli: Number(hargaBeli),
           variants: variants && variants.length > 0 ? {

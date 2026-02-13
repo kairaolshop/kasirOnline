@@ -1,15 +1,30 @@
 import { prisma } from "@/lib/prisma";
 import { NextResponse } from "next/server";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const barang = await prisma.barang.findMany({
-      include: {
-        variants: true, // WAJIB ADA agar barang.variants tidak undefined
-      },
-      orderBy: { createdAt: "desc" }
+    const { searchParams } = new URL(request.url);
+    const page = parseInt(searchParams.get("page") || "1");
+    const limit = parseInt(searchParams.get("limit") || "50");
+    const skip = (page - 1) * limit;
+
+    // Ambil data dengan limit dan skip
+    const [barang, totalCount] = await prisma.$transaction([
+      prisma.barang.findMany({
+        skip: skip,
+        take: limit,
+        include: { variants: true },
+        orderBy: { createdAt: "desc" }
+      }),
+      prisma.barang.count() // Untuk menghitung total halaman
+    ]);
+
+    return NextResponse.json({
+      data: barang,
+      total: totalCount,
+      totalPages: Math.ceil(totalCount / limit),
+      currentPage: page
     });
-    return NextResponse.json(barang);
   } catch (error) {
     return NextResponse.json({ error: "Gagal mengambil data" }, { status: 500 });
   }
