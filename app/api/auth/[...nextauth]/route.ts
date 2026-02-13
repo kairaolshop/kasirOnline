@@ -12,33 +12,33 @@ const handler = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(credentials) {
-  // 1. Pastikan credentials ada dan tipenya string
-  const username = credentials?.username as string;
-  const password = credentials?.password as string;
-
-  if (!username || !password) {
+  if (!credentials?.username || !credentials?.password) {
     return null;
   }
 
-  // 2. Query ke Prisma menggunakan variabel yang sudah dipastikan string
-  const user = await prisma.user.findUnique({
-    where: { 
-      username: username 
-    },
-  });
+  const username = credentials.username as string;
+  const password = credentials.password as string;
 
-  if (!user) return null;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { username },
+    });
 
-  // 3. Bandingkan password (sekarang variabel password sudah pasti string)
-  const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!user) return null;
 
-  if (!isPasswordValid) return null;
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
-  return {
-    id: user.id.toString(),
-    name: user.username,
-    role: user.role,
-  };
+    if (!isPasswordValid) return null;
+
+    return {
+      id: user.id.toString(),
+      name: user.username,
+      role: user.role,
+    };
+  } catch (error) {
+    console.error("Error authorize:", error);
+    return null;
+  }
 },
     }),
   ],
