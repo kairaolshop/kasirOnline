@@ -3,15 +3,16 @@ import { prisma } from '@/lib/prisma';
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params:Promise< { id: string }> }
 ) {
-  const id = Number(params.id);
+  const id = await params;
+  const idNumber = Number(id);
 
   try {
     await prisma.$transaction(async (tx) => {
       // 1. Ambil detail produk untuk kembalikan stok
       const items = await tx.penjualan.findMany({
-        where: { transaksiId: id }
+        where: { transaksiId: idNumber }
       });
 
       // 2. Kembalikan stok
@@ -24,7 +25,7 @@ export async function DELETE(
 
       // 3. Hapus Header (Detail akan ikut terhapus otomatis jika Cascade Delete aktif)
       await tx.transaksi.delete({
-        where: { id: id },
+        where: { id: idNumber },
       });
     });
 
