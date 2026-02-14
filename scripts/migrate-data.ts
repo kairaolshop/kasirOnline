@@ -32,7 +32,7 @@ async function main() {
         console.error(`[${i+1}] ❌ Varian tidak ditemukan untuk Kode: ${row.kode_barang}, Warna: ${row.warna}`);
         continue;
       }
-
+      const tanggalmanual = "2026-02-13";
       // 2. Buat atau cari Header Transaksi (berdasarkan kode_pesanan)
       const transaksi = await prisma.transaksi.upsert({
         where: { kodePesanan: row.kode_pesanan.toString() },
@@ -40,7 +40,7 @@ async function main() {
         create: {
           kodePesanan: row.kode_pesanan.toString(),
           marketplace: row.marketplace || "Offline",
-          tanggal: new Date(), // Atur tanggal jika ada kolomnya di SQLite
+          tanggal: new Date(tanggalmanual), // Atur tanggal jika ada kolomnya di SQLite
         },
       });
 
@@ -58,7 +58,7 @@ async function main() {
         }
       });
 
-      console.log(`[${i+1}/${rows.length}] ✅ Pesanan ${row.kode_pesanan} - ${row.nama_barang} terupload.`);
+      console.log(`[${i+1}/${rows.length}] ✅ Pesanan ${row.kode_pesanan} - ${row.nama_barang} terupload. - ${tanggalmanual}` );
     }
 
     console.log("\n✨ Migrasi Penjualan Beres!");

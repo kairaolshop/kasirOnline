@@ -89,8 +89,9 @@ const handleRefresh = async () => {
 
     const confirmAction = confirm(`Ringkas semua transaksi tanggal ${rekapTanggal}?`);
     if (!confirmAction) return;
+    
     setLoadingType("simpan");
-    const toasId = toast.loading("sedang meringkas data...")
+    const toasId = toast.loading("sedang meringkas data...");
 
     try {
       const res = await fetch("/api/penghasilan", {
@@ -98,21 +99,21 @@ const handleRefresh = async () => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tanggal: rekapTanggal })
       });
-
       const result = await res.json();
+
       if (res.ok) {
-        toast.success("Berhasil diringkas!",{id: toasId});
+        toast.success(result.message || "Berhasil diringkas!", { id: toasId });
         mutate();
       } else {
-        const result = await res.json();
-        toast.error(result.message || "Gagal meringkas data");
+        toast.error(result.message || result.error || "Gagal meringkas data", { id: toasId });
       }
     } catch (err) {
-      alert("Terjadi kesalahan sistem.");
-    } finally{
-      setLoadingType(null);
+      console.error("Debug Error:", err); 
+      toast.error("Terjadi kesalahan sistem.", { id: toasId });
+    } finally {
+      setLoadingType(null); 
     }
-  };
+    };
 
   const hapusTerpilih = async () => {
     if (!selectedId) return alert("Pilih baris data terlebih dahulu!");
