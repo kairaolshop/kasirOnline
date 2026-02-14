@@ -1,3 +1,6 @@
+// scrip upload data penjualan ke database
+// npx ts-node --transpile-only scripts/migrate-data.ts
+
 import { PrismaClient } from '@prisma/client';
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';

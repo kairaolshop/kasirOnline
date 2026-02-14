@@ -7,6 +7,7 @@ import { signOut, useSession } from "next-auth/react";
 import {toast} from "sonner"
 
 import Link from "next/link";
+import { Trash2 } from "lucide-react";
 
 interface Marketplace {
   id: number;
@@ -35,6 +36,7 @@ export default function Home() {
   const router = useRouter();
   // ==================== STATE ====================
   const [isMounted, setIsMounted] = useState(false);
+  const [searchKodePesanan, setSearchKodePesanan] = useState("");
 
   // Form & Data
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
@@ -109,13 +111,13 @@ export default function Home() {
     }
   }, [namaProduk]);
 
-  // Fetch penjualan harian (ikuti tanggalInput)
+  
   useEffect(() => {
     if (!isMounted || !tanggalInput) return;
 
     const fetchPenjualan = async () => {
       try {
-        const url = `/api/penjualan?tanggal=${tanggalInput}&_=${Date.now()}`;
+        const url = `/api/penjualan?search=${searchKodePesanan}&tanggal=${tanggalInput}&_=${Date.now()}`;
         const res = await fetch(url);
         const data = await res.json();
         setPenjualanHarian(data || []);
@@ -123,10 +125,10 @@ export default function Home() {
         console.error("Gagal load data harian", err);
         setPenjualanHarian([]);
       }
-    };
+    }
 
     fetchPenjualan();
-  }, [tanggalInput, isMounted]);
+  }, [searchKodePesanan, isMounted]);
 
   // ==================== COMPUTED VALUES ====================
   const { terjualShopee, terjualTiktok } = useMemo(() => {
@@ -538,7 +540,10 @@ useEffect(() => {
 
         <div className="flex-1 min-w-[180px]">
           <label className="block text-sm mb-1">Cari Kode</label>
-          <input type="text" className="w-full border rounded px-3 py-2 text-sm" placeholder="Kode pesanan..." />
+          <input 
+          value={searchKodePesanan}
+          onChange={(e) => setSearchKodePesanan(e.target.value)}
+          type="text" className="w-full border rounded px-3 py-2 text-sm" placeholder="Kode pesanan..." />
         </div>
 
         <div className="flex gap-2 flex-wrap">
@@ -752,7 +757,11 @@ useEffect(() => {
             <tbody>
               {penjualanHarian.length === 0 ? (
                 <tr className="text-center text-gray-500 py-4">
-                  <td colSpan={13} className="p-4">Belum ada data penjualan hari ini.</td>
+                  <td colSpan={13} className="p-6">
+                      {searchKodePesanan.trim() 
+                        ? `Tidak ditemukan transaksi dengan kode "${searchKodePesanan}"`
+                        : "Belum ada data penjualan hari ini."}
+                    </td>
                 </tr>
               ) : (
                 penjualanHarian.map((transaksi: any, idx: number) => {
@@ -801,9 +810,7 @@ useEffect(() => {
                           className="bg-red-100 text-red-600 hover:bg-red-600 hover:text-white p-1.5 rounded transition-colors"
                           title="Hapus & Kembalikan Stok"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
+                          <Trash2 size={16}></Trash2>
                         </button>
                       </td>
                     </tr>

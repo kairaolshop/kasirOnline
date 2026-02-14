@@ -1,10 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 
-// GET: Ambil semua transaksi beserta detail produknya
+
 export async function GET(request: NextRequest) {
+  const { searchParams} = new URL(request.url);
+  const search = searchParams.get(`search`);
+  let whereClause: any ={};
+
+  if (search){
+    whereClause.kodePesanan = {
+      contains: search,
+    }
+  }
   try {
     const data = await prisma.transaksi.findMany({
+      where: whereClause,
       include: {
         items: {
           include: {
@@ -17,7 +27,7 @@ export async function GET(request: NextRequest) {
         },
       },
       orderBy: {
-        tanggal: 'desc',
+        id:'desc',
       },
     });
 
