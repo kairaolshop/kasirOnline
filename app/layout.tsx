@@ -23,25 +23,22 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
-      <body className={`${inter.className} bg-[#c9d7ff] min-h-screen`}>
-        <Providers>
-          <Toaster
-              position="top-center"
-              richColors
-              duration={5000}
-              closeButton
-              style={{
-                position: 'fixed',
-                top: '50%',
-                left: '50%',
-                transform: 'translate(-50%, -50%)',
-                zIndex: 9999,
-              }}
-            />
-        <header className="bg-white shadow p-4">
-          <h1 className="text-2xl font-bold text-center">KasirOnline</h1>
-        </header>
-        <main className="container mx-auto p-4">{children}</main>
+      <body className={`${inter.className} bg-[#c9d7ff] min-h-screen text-gray-900`}>
+        <Providers>          
+          <Toaster 
+            position="top-center" 
+            richColors 
+            duration={3000} 
+            closeButton 
+          />
+          
+          <header className="bg-white shadow p-4 sticky top-0 z-40">
+            <h1 className="text-2xl font-bold text-center text-blue-700">KasirOnline</h1>
+          </header>
+
+          <main className="container mx-auto p-4">
+            {children}
+          </main>
         </Providers>
       </body>
     </html>

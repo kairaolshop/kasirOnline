@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
 
         await tx.penjualan.create({
           data: {
-            transaksiId: header.id, // Hubungkan ke ID header
+            transaksiId: header.id,
             varianId: item.varianId,
             jumlah: item.jumlah,
             hargaJual: item.hargaJual,
@@ -82,8 +82,6 @@ export async function POST(request: NextRequest) {
             tanggal: tglTransaksi,
           },
         });
-
-        // 3. Potong Stok Varian
         await tx.varian.update({
           where: { id: item.varianId },
           data: { stok: { decrement: item.jumlah } },
@@ -100,7 +98,6 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// DELETE: Hapus satu transaksi utuh menggunakan ID
 export async function DELETE(request: NextRequest) {
   const { searchParams } = request.nextUrl;
   const id = searchParams.get('id');
@@ -111,14 +108,14 @@ export async function DELETE(request: NextRequest) {
 
   try {
     await prisma.$transaction(async (tx) => {
-      // 1. Ambil detail untuk kembalikan stok
+     
       const items = await tx.penjualan.findMany({
         where: { transaksiId: Number(id) }
       });
 
       if (items.length === 0) throw new Error('Data tidak ditemukan');
 
-      // 2. Kembalikan stok satu per satu
+      
       for (const item of items) {
         await tx.varian.update({
           where: { id: item.varianId },
@@ -126,7 +123,7 @@ export async function DELETE(request: NextRequest) {
         });
       }
 
-      // 3. Hapus Transaksi (Detail otomatis terhapus karena Cascade)
+      
       await tx.transaksi.delete({
         where: { id: Number(id) },
       });

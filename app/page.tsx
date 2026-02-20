@@ -478,10 +478,10 @@ useEffect(() => {
   if (!isMounted) return null;
 
   return (
-    <div className="min-h-screen bg-[#c9d7ff] p-4 font-sans">
+    <div className="min-h-screen p-4 font-sans space-y-5 md:space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow p-4 mb-4">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="flex flex-col flex-row justify-between items-center gap-4">
           <h1 className="text-2xl font-bold text-blue-800">Kasir - Transaksi Harian</h1>
           <p className="text-lg text-red-500 font-bold">
           {new Intl.DateTimeFormat("id-ID", {
@@ -824,8 +824,8 @@ useEffect(() => {
       </div>
 
       {/* Keranjang Pembeli */}
-      <div className="mt-6 bg-white rounded-lg shadow p-4">
-        <h3 className="text-lg font-bold mb-3">Keranjang Pembeli</h3>
+      <div className="mt-6 bg-white rounded-lg border shadow p-4">
+        <h3 className="mb-3">Keranjang Pembeli</h3>
         {keranjang.length === 0 ? (
           <p className="text-center text-gray-500 py-6">Keranjang masih kosong...</p>
         ) : (
@@ -837,8 +837,6 @@ useEffect(() => {
                   <th className="p-2 text-left">Nama</th>
                   <th className="p-2 text-left">Warna</th>
                   <th className="p-2 text-center">Qty</th>
-                  {/*<th className="p-2 text-right">Harga Jual</th>*/}
-                  {/*<th className="p-2 text-right">Harga Beli</th>*/}
                   <th className="p-2 text-right">Total Jual</th>
                   <th className="p-2 text-right">Total Beli</th>
                   <th className="p-2 text-right">Admin</th>
@@ -853,8 +851,6 @@ useEffect(() => {
                     <td className="p-2">{item.namaBarang}</td>
                     <td className="p-2">{item.warna || "-"}</td>
                     <td className="p-2 text-center">{item.jumlah}</td>
-                    {/*<td className="p-2 text-right">Rp {item.hargaJual.toLocaleString("id-ID")}</td>*/}
-                    {/*<td className="p-2 text-right">Rp {item.hargaBeli.toLocaleString("id-ID")}</td>*/}
                     <td className="p-2 text-right">Rp {item.subtotal.toLocaleString("id-ID")}</td>
                     <td className="p-2 text-right">Rp {item.totalBeli.toLocaleString("id-ID")}</td>
                     <td className="p-2 text-right">Rp {item.totalAdmin.toLocaleString("id-ID")}</td>
@@ -869,19 +865,21 @@ useEffect(() => {
       </div>
 
       {/* Ringkasan bawah */}
-      <div className="mt-6 bg-white rounded-lg shadow p-4 flex flex-wrap gap-6 justify-center">
-        <div className="flex items-center gap-3">
-          <div className="bg-green-600 text-white w-8 h-8 flex items-center justify-center rounded">S</div>
-          <span className="font-medium">{terjualShopee} Terjual</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="bg-black text-white w-8 h-8 flex items-center justify-center rounded">♪</div>
-          <span className="font-medium">{terjualTiktok} Terjual</span>
-        </div>
-        <button className="cursor-pointer bg-blue-600 text-white px-6 py-3 rounded-lg font-medium">
-          🖨️ Print PDF
-        </button>
+      
+        <div className="flex flex-wrap justify-center gap-6 max-w-5xl mx-auto">
+          <div className="flex items-center gap-3">
+            <div className="bg-green-600 text-white w-8 h-8 flex items-center justify-center rounded">S</div>
+            <span className="font-medium">{terjualShopee} Terjual</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="bg-black text-white w-8 h-8 flex items-center justify-center rounded">♪</div>
+            <span className="font-medium">{terjualTiktok} Terjual</span>
+          </div>
+          <button className="bg-blue-600 text-white px-6 py-3 rounded-lg font-medium">
+            🖨️ Print PDF
+          </button>
       </div>
+      
       {isLoading && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-xl flex flex-col items-center gap-4">
@@ -890,7 +888,7 @@ useEffect(() => {
               {loadingAction || "Sedang memproses..."}
             </p>
           </div>
-        </div>
+        </div>      
       )}
     </div>
   );
